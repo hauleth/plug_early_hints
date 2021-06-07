@@ -4,10 +4,12 @@ defmodule PlugEarlyHints.MixProject do
   def project do
     [
       app: :plug_early_hints,
+      description: "Plug for generating Early Hints response",
       version: "0.1.0",
       elixir: "~> 1.12",
       start_permanent: Mix.env() == :prod,
-      deps: deps()
+      deps: deps(),
+      package: package()
     ]
   end
 
@@ -15,6 +17,16 @@ defmodule PlugEarlyHints.MixProject do
   def application do
     [
       extra_applications: [:logger]
+    ]
+  end
+
+  defp package do
+    [
+      licenses: ~w[MIT],
+      links: %{
+        "GitHub" => "https://github.com/hauleth/plug_early_hints",
+        "Early Hints" => "https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/103"
+      }
     ]
   end
 
