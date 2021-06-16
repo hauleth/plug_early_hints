@@ -1,27 +1,69 @@
 defmodule PlugEarlyHintsTest do
   use ExUnit.Case
-  use PlugTestHTTP2
+
+  import Plug.Test
+  import ExUnit.CaptureLog
 
   @subject PlugEarlyHints
 
-  test "compiles with `:callback` as &Mod.fun/arity" do
-    Plug.Builder.compile(
-      __ENV__,
-      [
-        {@subject, [paths: ["/foo": []], callback: &__MODULE__.identity/2], []}
-      ],
-      []
-    )
+  describe ":enable func" do
+    test "compiles &Mod.fun/1" do
+      Plug.Builder.compile(
+        __ENV__,
+        [
+          {@subject, [paths: ["/foo": []], enable: &__MODULE__.always/1], []}
+        ],
+        []
+      )
+    end
+
+    test "raises if passed function has wrong arity" do
+      assert_raise PlugEarlyHints.BadArityError, fn ->
+        @subject.init(paths: [], enable: &__MODULE__.identity/2)
+      end
+    end
+
+    test "warn if passed function is lambda" do
+      assert capture_log(fn ->
+               @subject.init(paths: ["/foo": []], enable: fn _ -> true end)
+             end) =~ "Function passed to `:enable` is not external function, which may cause problems"
+    end
+
+    test "warn if function local function" do
+      assert capture_log(fn ->
+               @subject.init(paths: ["/foo": []], enable: &always/1)
+             end) =~ "Function passed to `:enable` is not external function, which may cause problems"
+    end
   end
 
-  test "compiles with `:enable` as &Mod.fun/arity" do
-    Plug.Builder.compile(
-      __ENV__,
-      [
-        {@subject, [paths: ["/foo": []], enable: &__MODULE__.always/1], []}
-      ],
-      []
-    )
+  describe ":callback func" do
+    test "compiles &Mod.fun/2" do
+      Plug.Builder.compile(
+        __ENV__,
+        [
+          {@subject, [paths: ["/foo": []], callback: &__MODULE__.identity/2], []}
+        ],
+        []
+      )
+    end
+
+    test "raises if passed function has wrong arity" do
+      assert_raise PlugEarlyHints.BadArityError, fn ->
+        @subject.init(paths: [], callback: &__MODULE__.always/1)
+      end
+    end
+
+    test "warn if passed function is lambda" do
+      assert capture_log(fn ->
+               @subject.init(paths: ["/foo": []], callback: fn _conn, path -> path end)
+             end) =~ "Function passed to `:callback` is not external function, which may cause problems"
+    end
+
+    test "warn if function local function" do
+      assert capture_log(fn ->
+               @subject.init(paths: ["/foo": []], callback: &identity/2)
+             end) =~ "Function passed to `:callback` is not external function, which may cause problems"
+    end
   end
 
   test "sends early hints" do
@@ -32,6 +74,7 @@ defmodule PlugEarlyHintsTest do
 
     conn =
       conn(:get, "/")
+      |> put_http_protocol(:"HTTP/2")
       |> @subject.call(opts)
       |> Plug.Conn.send_resp(200, "")
 
@@ -50,6 +93,7 @@ defmodule PlugEarlyHintsTest do
 
     conn =
       conn(:get, "/")
+      |> put_http_protocol(:"HTTP/2")
       |> @subject.call(opts)
       |> Plug.Conn.send_resp(200, "")
 
@@ -60,7 +104,8 @@ defmodule PlugEarlyHintsTest do
     opts = @subject.init(paths: ["/foo": [rel: "prefetch"]])
 
     conn =
-      conn(:get, "/", :"HTTP/1")
+      conn(:get, "/")
+      |> put_http_protocol(:"HTTP/1")
       |> @subject.call(opts)
       |> Plug.Conn.send_resp(200, "")
 
@@ -71,7 +116,8 @@ defmodule PlugEarlyHintsTest do
     opts = @subject.init(paths: ["/foo": [rel: "prefetch"]])
 
     conn =
-      conn(:get, "/", :"HTTP/1.1")
+      conn(:get, "/")
+      |> put_http_protocol("HTTP/1.1")
       |> @subject.call(opts)
       |> Plug.Conn.send_resp(200, "")
 
@@ -87,6 +133,7 @@ defmodule PlugEarlyHintsTest do
 
     conn =
       conn(:get, "/")
+      |> put_http_protocol(:"HTTP/2")
       |> @subject.call(opts)
       |> Plug.Conn.send_resp(200, "")
 
@@ -106,6 +153,7 @@ defmodule PlugEarlyHintsTest do
 
     conn =
       conn(:get, "/")
+      |> put_http_protocol(:"HTTP/2")
       |> @subject.call(opts)
       |> Plug.Conn.send_resp(200, "")
 

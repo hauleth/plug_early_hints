@@ -1,4 +1,16 @@
 defmodule PlugEarlyHints do
+  defmodule BadArityError do
+    defexception [:function, :arity, :key]
+
+    @impl true
+    def message(exception) do
+      {:arity, arity} = Function.info(exception.function, :arity)
+
+      "Function passed to #{exception.key} has arity #{arity} while expected" <>
+        "arity is #{exception.arity}"
+    end
+  end
+
   @moduledoc """
   Convenience plug for sending [HTTP 103 Early Hints][mdn-103].
 
@@ -7,7 +19,7 @@ defmodule PlugEarlyHints do
   that you will need CSS later, so it can start fetching it right now.
 
   ## Usage
-  
+
       plug #{inspect(__MODULE__)},
         # List all resources that will be needed later when rendering page
         paths: [
@@ -55,17 +67,38 @@ defmodule PlugEarlyHints do
 
   @behaviour Plug
 
+  require Logger
+
   @impl true
   def init(opts) do
-    enable = Keyword.get(opts, :enable, &__MODULE__.__true__/1)
+    enable = get_func(opts, :enable, 1, &__MODULE__.__true__/1)
     paths = Keyword.fetch!(opts, :paths)
-    cb = Keyword.get(opts, :callback, &__MODULE__.__id__/2)
+    cb = get_func(opts, :callback, 2, &__MODULE__.__id__/2)
 
     %{
       paths: paths,
       callback: cb,
       enable: enable
     }
+  end
+
+  defp get_func(opts, key, arity, default) do
+    case Keyword.fetch(opts, key) do
+      :error ->
+        default
+
+      {:ok, func} when is_function(func, arity) ->
+        if Function.info(func, :type) != {:type, :external} do
+          Logger.warn(
+            "Function passed to `#{inspect(key)}` is not external function, which may cause problems"
+          )
+        end
+
+        func
+
+      {:ok, func} when is_function(func) ->
+        raise BadArityError, function: func, arity: arity, key: key
+    end
   end
 
   @impl true
